@@ -6,6 +6,6 @@ cargo clippy --fix --allow-dirty --allow-staged
 cargo fix --allow-dirty --allow-staged
 
 # format python code
-ruff format
+uv run ruff format
 # lint + auto-fix what’s safe
-ruff check --fix
+uv run ruff check --fix
