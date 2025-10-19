@@ -818,7 +818,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ritellm_rs"
+name = "ritellm"
 version = "0.1.0"
 dependencies = [
  "pyo3",
