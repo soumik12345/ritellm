@@ -1,5 +1,3 @@
-import json
-
 import rich
 import weave
 from dotenv import load_dotenv
@@ -17,7 +15,7 @@ messages = [
 ]
 
 response = weave.op(completion)(
-    model="gpt-3.5-turbo", messages=messages, temperature=0.7, max_tokens=100
+    model="openai/gpt-3.5-turbo", messages=messages, temperature=0.7, max_tokens=100
 )
 
 assistant_message = response["choices"][0]["message"]["content"]
@@ -26,6 +24,6 @@ rich.print("\nAssistant's response:")
 rich.print(assistant_message)
 
 rich.print("\nToken usage:")
-rich.print(f"  Prompt tokens: {response['usage']['prompt_tokens']}")
-rich.print(f"  Completion tokens: {response['usage']['completion_tokens']}")
-rich.print(f"  Total tokens: {response['usage']['total_tokens']}")
+rich.print(f"\tPrompt tokens: {response['usage']['prompt_tokens']}")
+rich.print(f"\tCompletion tokens: {response['usage']['completion_tokens']}")
+rich.print(f"\tTotal tokens: {response['usage']['total_tokens']}\n")

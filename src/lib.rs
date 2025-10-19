@@ -12,6 +12,7 @@ use std::env;
 /// * `messages` - A list of message dictionaries with "role" and "content" keys
 /// * `temperature` - Optional sampling temperature (0.0 to 2.0)
 /// * `max_tokens` - Optional maximum tokens to generate
+/// * `base_url` - Optional base URL for the OpenAI API
 /// * `additional_params` - Optional additional parameters as a JSON string
 ///
 /// # Returns
@@ -20,12 +21,13 @@ use std::env;
 /// # Environment Variables
 /// * `OPENAI_API_KEY` - Required: Your OpenAI API key
 #[pyfunction]
-#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, additional_params=None))]
+#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, base_url=None, additional_params=None))]
 fn openai_completion(
     model: String,
     messages: Vec<HashMap<String, String>>,
     temperature: Option<f32>,
     max_tokens: Option<i32>,
+    base_url: Option<String>,
     additional_params: Option<String>,
 ) -> PyResult<String> {
     // Load API key from environment variable
@@ -51,6 +53,7 @@ fn openai_completion(
             messages,
             temperature,
             max_tokens,
+            base_url,
             additional_params,
         )
         .await
@@ -63,10 +66,11 @@ async fn openai_completion_async(
     messages: Vec<HashMap<String, String>>,
     temperature: Option<f32>,
     max_tokens: Option<i32>,
+    base_url: Option<String>,
     additional_params: Option<String>,
 ) -> PyResult<String> {
     let client = reqwest::Client::new();
-    let url = "https://api.openai.com/v1/chat/completions";
+    let url = base_url.unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
 
     // Build the request body
     let mut body = json!({
@@ -144,6 +148,7 @@ async fn openai_completion_async(
 /// * `messages` - A list of message dictionaries with "role" and "content" keys
 /// * `temperature` - Optional sampling temperature (0.0 to 2.0)
 /// * `max_tokens` - Optional maximum tokens to generate
+/// * `base_url` - Optional base URL for the API
 /// * `additional_params` - Optional additional parameters as a JSON string
 ///
 /// # Returns
@@ -152,12 +157,13 @@ async fn openai_completion_async(
 /// # Errors
 /// Returns an error if the provider prefix is not supported
 #[pyfunction]
-#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, additional_params=None))]
+#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, base_url=None, additional_params=None))]
 fn completion_gateway(
     model: String,
     messages: Vec<HashMap<String, String>>,
     temperature: Option<f32>,
     max_tokens: Option<i32>,
+    base_url: Option<String>,
     additional_params: Option<String>,
 ) -> PyResult<String> {
     // Check if model starts with "openai/"
@@ -171,6 +177,7 @@ fn completion_gateway(
             messages,
             temperature,
             max_tokens,
+            base_url,
             additional_params,
         )
     } else {

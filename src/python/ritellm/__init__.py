@@ -3,14 +3,13 @@ from typing import Any
 
 from .ritellm import completion_gateway
 
-__all__ = ["completion"]
-
 
 def completion(
     model: str,
     messages: list[dict[str, str]],
     temperature=None,
     max_tokens: int | None = None,
+    base_url: str | None = None,
     additional_params: str | None = None,
 ) -> dict[str, Any]:
     """
@@ -24,6 +23,7 @@ def completion(
         messages (list): A list of message dictionaries with "role" and "content" keys
         temperature (float, optional): Sampling temperature (0.0 to 2.0)
         max_tokens (int, optional): Maximum tokens to generate
+        base_url (str, optional): Base URL for the API endpoint
         additional_params (str, optional): Additional parameters as a JSON string
 
     Returns:
@@ -49,6 +49,7 @@ def completion(
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
+        base_url=base_url,
         additional_params=additional_params,
     )
     return json.loads(response_json)
