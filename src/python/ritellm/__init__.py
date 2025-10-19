@@ -18,6 +18,19 @@ def completion(
     This function provides a convenient interface to call various LLM providers' chat completion APIs
     through the Rust-backed completion_gateway binding. The model string should include a provider prefix.
 
+    !!! example
+        ```python
+        from ritellm import completion
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello!"}
+        ]
+        response = completion(model="openai/gpt-3.5-turbo", messages=messages)
+
+        print(response["choices"][0]["message"]["content"])
+        ```
+
     Args:
         model (str): The model to use with provider prefix (e.g., "openai/gpt-4", "openai/gpt-3.5-turbo")
         messages (list): A list of message dictionaries with "role" and "content" keys
@@ -34,15 +47,6 @@ def completion(
 
     Environment Variables:
         OPENAI_API_KEY: Required for OpenAI models
-
-    Example:
-        >>> from ritellm import completion
-        >>> messages = [
-        ...     {"role": "system", "content": "You are a helpful assistant."},
-        ...     {"role": "user", "content": "Hello!"}
-        ... ]
-        >>> response = completion(model="openai/gpt-3.5-turbo", messages=messages)
-        >>> print(response["choices"][0]["message"]["content"])
     """
     response_json = completion_gateway(
         model=model,
