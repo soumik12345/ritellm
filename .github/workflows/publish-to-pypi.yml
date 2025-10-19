@@ -38,11 +38,11 @@ jobs:
         run: |
           uv tool install maturin
           uv pip install -r pyproject.toml --group build
-          uv run maturin develop
-          uv build
-          uv run twine check --strict dist/*
+          uv run maturin build --release --sdist --compatibility manylinux2014
+          uv run twine check --strict target/wheels/*
 
       - name: 🚀 Publish to PyPi
         uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           attestations: true
+          packages-dir: target/wheels/
