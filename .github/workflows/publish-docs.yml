@@ -12,14 +12,15 @@ jobs:
     name: update documentations on gitHub pages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7.1.1
         with:
           python-version: 3.13.7
+          activate-environment: true
       - uses: actions/cache@v4
         with:
           key: ${{ github.ref }}
           path: .cache
       - run: |
-          uv sync --all-groups
+          uv pip install -r pyproject.toml --group docs
       - run: uv run mkdocs gh-deploy --force
