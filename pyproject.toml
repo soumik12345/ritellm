@@ -48,7 +48,7 @@ target-version = "py312"
 select = ["I", "F401"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["inksphere_engine"]
+known-first-party = ["ritellm"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
 
