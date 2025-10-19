@@ -12,6 +12,7 @@ use std::env;
 /// * `messages` - A list of message dictionaries with "role" and "content" keys
 /// * `temperature` - Optional sampling temperature (0.0 to 2.0)
 /// * `max_tokens` - Optional maximum tokens to generate
+/// * `base_url` - Optional base URL for the OpenAI API
 /// * `additional_params` - Optional additional parameters as a JSON string
 ///
 /// # Returns
@@ -20,12 +21,13 @@ use std::env;
 /// # Environment Variables
 /// * `OPENAI_API_KEY` - Required: Your OpenAI API key
 #[pyfunction]
-#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, additional_params=None))]
+#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, base_url=None, additional_params=None))]
 fn openai_completion(
     model: String,
     messages: Vec<HashMap<String, String>>,
     temperature: Option<f32>,
     max_tokens: Option<i32>,
+    base_url: Option<String>,
     additional_params: Option<String>,
 ) -> PyResult<String> {
     // Load API key from environment variable
@@ -51,6 +53,7 @@ fn openai_completion(
             messages,
             temperature,
             max_tokens,
+            base_url,
             additional_params,
         )
         .await
@@ -63,10 +66,11 @@ async fn openai_completion_async(
     messages: Vec<HashMap<String, String>>,
     temperature: Option<f32>,
     max_tokens: Option<i32>,
+    base_url: Option<String>,
     additional_params: Option<String>,
 ) -> PyResult<String> {
     let client = reqwest::Client::new();
-    let url = "https://api.openai.com/v1/chat/completions";
+    let url = base_url.unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
 
     // Build the request body
     let mut body = json!({
@@ -133,8 +137,60 @@ async fn openai_completion_async(
     Ok(response_text)
 }
 
+/// Gateway function that routes completion requests to the appropriate provider
+///
+/// This function checks the model prefix and routes to the appropriate completion function.
+/// Currently supports:
+/// - "openai/" prefix: routes to OpenAI completion
+///
+/// # Arguments
+/// * `model` - The model to use with provider prefix (e.g., "openai/gpt-4")
+/// * `messages` - A list of message dictionaries with "role" and "content" keys
+/// * `temperature` - Optional sampling temperature (0.0 to 2.0)
+/// * `max_tokens` - Optional maximum tokens to generate
+/// * `base_url` - Optional base URL for the API
+/// * `additional_params` - Optional additional parameters as a JSON string
+///
+/// # Returns
+/// A JSON string containing the API response
+///
+/// # Errors
+/// Returns an error if the provider prefix is not supported
+#[pyfunction]
+#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, base_url=None, additional_params=None))]
+fn completion_gateway(
+    model: String,
+    messages: Vec<HashMap<String, String>>,
+    temperature: Option<f32>,
+    max_tokens: Option<i32>,
+    base_url: Option<String>,
+    additional_params: Option<String>,
+) -> PyResult<String> {
+    // Check if model starts with "openai/"
+    if model.starts_with("openai/") {
+        // Strip the "openai/" prefix
+        let actual_model = model.strip_prefix("openai/").unwrap().to_string();
+
+        // Call openai_completion with the actual model name
+        openai_completion(
+            actual_model,
+            messages,
+            temperature,
+            max_tokens,
+            base_url,
+            additional_params,
+        )
+    } else {
+        // Provider not supported
+        Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "Provider not supported for model: {}",
+            model
+        )))
+    }
+}
+
 #[pymodule]
 fn ritellm(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(openai_completion, m)?)?;
+    m.add_function(wrap_pyfunction!(completion_gateway, m)?)?;
     Ok(())
 }
