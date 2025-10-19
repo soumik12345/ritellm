@@ -3,7 +3,7 @@ name = "ritellm"
 version = "0.1.0"
 description = "A fast LLM gateway"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "python-dotenv>=1.1.1",
     "weave>=0.52.10",
@@ -41,6 +41,10 @@ backend = [
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
+
+[tool.maturin]
+python-source = "src/python"
+module-name = "ritellm"
 
 [tool.ruff]
 target-version = "py312"

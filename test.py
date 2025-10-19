@@ -4,7 +4,7 @@ import rich
 import weave
 from dotenv import load_dotenv
 
-from ritellm import openai_completion
+from ritellm import completion
 
 load_dotenv()
 
@@ -16,12 +16,10 @@ messages = [
     {"role": "user", "content": "Explain what Rust is in one sentence."},
 ]
 
-response_json = weave.op(openai_completion)(
+response = weave.op(completion)(
     model="gpt-3.5-turbo", messages=messages, temperature=0.7, max_tokens=100
 )
 
-# Parse and display the response
-response = json.loads(response_json)
 assistant_message = response["choices"][0]["message"]["content"]
 
 rich.print("\nAssistant's response:")
