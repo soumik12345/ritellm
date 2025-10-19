@@ -11,9 +11,111 @@ on:
 permissions: {} # Explicitly remove all permissions by default
 
 jobs:
+  linux:
+    name: Build Linux wheels
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v5
+
+      - name: 🏗️ Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: 'true'
+          manylinux: auto
+
+      - name: 📦 Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist
+
+  macos:
+    name: Build macOS wheels
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v5
+
+      - name: 🏗️ Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: 'true'
+
+      - name: 📦 Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist
+
+  windows:
+    name: Build Windows wheels
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v5
+
+      - name: 🏗️ Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: 'true'
+
+      - name: 📦 Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: 📥 Checkout the repository
+        uses: actions/checkout@v5
+
+      - name: 🏗️ Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      - name: 📦 Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
   publish-release:
     name: Publish Release Package
     runs-on: ubuntu-latest
+    needs: [linux, macos, windows, sdist]
     environment:
       name: release
       url: https://pypi.org/project/ritellm/
@@ -21,28 +123,15 @@ jobs:
     permissions:
       id-token: write # Required for PyPI publishing
       contents: read # Required for checkout
-    strategy:
-      matrix:
-        python-version: ["3.13"]
     steps:
-      - name: 📥 Checkout the repository
-        uses: actions/checkout@v5
-
-      - name: 🐍 Install uv and set Python version ${{ matrix.python-version }}
-        uses: astral-sh/setup-uv@v7.1.1
+      - name: 📥 Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          python-version: ${{ matrix.python-version }}
-          activate-environment: true
-
-      - name: 🏗️ Build source and wheel distributions
-        run: |
-          uv tool install maturin
-          uv pip install -r pyproject.toml --group build
-          uv run maturin build --release --sdist --compatibility manylinux2014
-          uv run twine check --strict target/wheels/*
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
 
       - name: 🚀 Publish to PyPi
         uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           attestations: true
-          packages-dir: target/wheels/
