@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
-use reqwest;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::env;
 
@@ -30,18 +29,31 @@ fn openai_completion(
     additional_params: Option<String>,
 ) -> PyResult<String> {
     // Load API key from environment variable
-    let api_key = env::var("OPENAI_API_KEY")
-        .map_err(|_| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            "OPENAI_API_KEY environment variable not set"
-        ))?;
+    let api_key = env::var("OPENAI_API_KEY").map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            "OPENAI_API_KEY environment variable not set",
+        )
+    })?;
 
     // Create a Tokio runtime to run async code
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to create runtime: {}", e)))?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Failed to create runtime: {}",
+            e
+        ))
+    })?;
 
     // Run the async completion function
     runtime.block_on(async {
-        openai_completion_async(api_key, model, messages, temperature, max_tokens, additional_params).await
+        openai_completion_async(
+            api_key,
+            model,
+            messages,
+            temperature,
+            max_tokens,
+            additional_params,
+        )
+        .await
     })
 }
 
@@ -72,10 +84,16 @@ async fn openai_completion_async(
 
     // Merge additional parameters if provided
     if let Some(params_str) = additional_params {
-        let additional: Value = serde_json::from_str(&params_str)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid JSON in additional_params: {}", e)))?;
-        
-        if let (Some(body_obj), Some(additional_obj)) = (body.as_object_mut(), additional.as_object()) {
+        let additional: Value = serde_json::from_str(&params_str).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid JSON in additional_params: {}",
+                e
+            ))
+        })?;
+
+        if let (Some(body_obj), Some(additional_obj)) =
+            (body.as_object_mut(), additional.as_object())
+        {
             for (key, value) in additional_obj {
                 body_obj.insert(key.clone(), value.clone());
             }
@@ -90,21 +108,27 @@ async fn openai_completion_async(
         .json(&body)
         .send()
         .await
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Request failed: {}", e)))?;
+        .map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Request failed: {}", e))
+        })?;
 
     // Check if the request was successful
     let status = response.status();
     if !status.is_success() {
-        let error_text = response.text().await
+        let error_text = response
+            .text()
+            .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            format!("API request failed with status {}: {}", status, error_text)
-        ));
+        return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "API request failed with status {}: {}",
+            status, error_text
+        )));
     }
 
     // Parse and return the response
-    let response_text = response.text().await
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to read response: {}", e)))?;
+    let response_text = response.text().await.map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to read response: {}", e))
+    })?;
 
     Ok(response_text)
 }
