@@ -14,7 +14,6 @@ dev = [
     "uv>=0.4.20",
     "pytest>=8.3.3",
     "isort>=5.13.2",
-    "black>=24.10.0",
     "ruff>=0.6.9",
     "textual-dev>=1.7.0",
     "openai>=1.108.2",
