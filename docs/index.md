@@ -25,7 +25,7 @@ RiteLLM is a high-performance LLM (Large Language Model) gateway that provides a
 Install RiteLLM using pip:
 
 ```bash
-uv pip install ritellm
+uv pip install git+https://github.com/soumik12345/ritellm.git
 ```
 
 ## 💻 Quick Start
