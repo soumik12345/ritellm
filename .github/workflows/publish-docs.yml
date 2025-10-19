@@ -21,6 +21,6 @@ jobs:
         with:
           key: ${{ github.ref }}
           path: .cache
-      # - run: |
-      #     uv pip install -r pyproject.toml --group docs
+      - run: |
+          uv pip install -r pyproject.toml --group docs
       - run: uv run mkdocs gh-deploy --force
