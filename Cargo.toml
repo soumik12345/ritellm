@@ -1,10 +1,7 @@
 [package]
 name = "ritellm"
-version = "0.0.0"  # Managed by cargo-dynamic-version
+version = "0.1.6"
 edition = "2024"
-
-[package.metadata.dynamic-version]
-git-tag-pattern = "*"
 
 [lib]
 name = "ritellm"
