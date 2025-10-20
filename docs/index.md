@@ -112,6 +112,10 @@ response = weave.op(completion)(
 # Your calls are now automatically traced in Weave!
 ```
 
+## 🙏 Gratitude
+
+`ritellm` is highly inspired by [litellm](https://github.com/BerriAI/litellm) and its simple API design.
+
 <div align="center">
 Made with ❤️ and 🦀
 </div>

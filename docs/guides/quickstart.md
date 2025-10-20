@@ -1,12 +1,6 @@
-# Streaming Responses
-
-ritellm supports streaming responses from LLM APIs, allowing you to receive and process responses in real-time as they are generated.
+# Quickstart
 
 ## Basic Usage
-
-### Non-Streaming (Default)
-
-By default, `completion()` returns the full response after the model finishes generating:
 
 ```python
 from ritellm import completion
@@ -189,40 +183,6 @@ response_text = stream_completion(messages)
 print(f"\n\nFull response length: {len(response_text)} characters")
 ```
 
-## Comparison with LiteLLM
-
-ritellm is designed as a drop-in replacement for LiteLLM. The streaming API is compatible:
-
-**LiteLLM:**
-```python
-from litellm import completion
-
-response = completion(
-    model="gpt-3.5-turbo",
-    messages=messages,
-    stream=True
-)
-
-for chunk in response:
-    print(chunk.choices[0].delta.content or "")
-```
-
-**ritellm:**
-```python
-from ritellm import completion
-
-response = completion(
-    model="openai/gpt-3.5-turbo",  # Note: requires provider prefix
-    messages=messages,
-    stream=True
-)
-
-for chunk in response:
-    print(chunk["choices"][0]["delta"].get("content", ""))
-```
-
-The main difference is that ritellm requires a provider prefix (e.g., `openai/`) in the model name and returns dictionaries instead of objects.
-
 ## Best Practices
 
 1. **Always handle missing content**: Not all chunks will have content, especially the first and last chunks.
@@ -257,20 +217,6 @@ The main difference is that ritellm requires a provider prefix (e.g., `openai/`)
        full_text += content
    ```
 
-## Performance Considerations
-
-Streaming is beneficial when:
-
-- You want to display results to users as soon as possible
-- You're generating long responses
-- You want to provide a better user experience with real-time feedback
-
-However, streaming may not be suitable when:
-
-- You need the complete response before processing
-- You're making batch requests
-- Network latency is high and chunking overhead is significant
-
 ## Supported Providers
 
 Currently, streaming is supported for:
@@ -278,4 +224,3 @@ Currently, streaming is supported for:
 - ✅ OpenAI (`openai/` prefix)
 
 More providers will be added in future releases.
-
