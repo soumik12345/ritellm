@@ -6,6 +6,7 @@ use std::env;
 use futures_util::stream::StreamExt;
 
 /// Result type for completion functions
+#[derive(Debug)]
 pub enum CompletionResult {
     Text(String),
     Stream(Vec<String>),

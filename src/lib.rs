@@ -1,9 +1,12 @@
-mod openai;
+pub mod openai;
 
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
 use openai::openai_completion;
+
+// Re-export for Rust usage
+pub use openai::{openai_completion_async, CompletionResult};
 
 /// Gateway function that routes completion requests to the appropriate provider
 ///
