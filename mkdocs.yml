@@ -74,5 +74,9 @@ plugins:
 
 nav:
   - Home: index.md
+  - Guides:
+    - Quickstart: guides/quickstart.md
   - API-Reference:
     - Python: api-reference/python/completion.md
+  - Implementation-Details:
+    - Streaming: implementation/streaming.md

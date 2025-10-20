@@ -19,6 +19,7 @@ RiteLLM is a high-performance LLM (Large Language Model) gateway that provides a
 - **📊 First-Class Observability**: Built-in integration with [Weights & Biases Weave](https://wandb.ai/site/weave) for seamless tracing, monitoring, and debugging
 - **🐍 Pythonic Interface**: Clean, intuitive Python API that feels native to the ecosystem
 - **🔒 Type-Safe**: Full type hints for better IDE support and code quality
+- **🌊 Streaming Support**: Real-time streaming responses for better user experience
 
 ## 🚀 Installation
 
@@ -54,6 +55,37 @@ print(response["choices"][0]["message"]["content"])
 print(f"Tokens used: {response['usage']['total_tokens']}")
 ```
 
+### Streaming Responses
+
+For real-time streaming of responses as they are generated:
+
+```python
+from ritellm import completion
+
+messages = [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Write a short poem about Rust."}
+]
+
+# Enable streaming
+response = completion(
+    model="openai/gpt-3.5-turbo",
+    messages=messages,
+    stream=True  # Enable streaming
+)
+
+# Stream the response
+for chunk in response:
+    if "choices" in chunk and len(chunk["choices"]) > 0:
+        content = chunk["choices"][0]["delta"].get("content", "")
+        if content:
+            print(content, end="", flush=True)
+
+print()  # New line after streaming completes
+```
+
+See the [Streaming Guide](streaming.md) for more details.
+
 ### With Weave Tracing
 
 RiteLLM has first-class support for Weave, enabling automatic tracing and monitoring of your LLM calls:
@@ -79,6 +111,10 @@ response = weave.op(completion)(
 
 # Your calls are now automatically traced in Weave!
 ```
+
+## 🙏 Gratitude
+
+`ritellm` is highly inspired by [litellm](https://github.com/BerriAI/litellm) and its simple API design.
 
 <div align="center">
 Made with ❤️ and 🦀
