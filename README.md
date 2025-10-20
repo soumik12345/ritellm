@@ -21,6 +21,7 @@ RiteLLM is a high-performance LLM (Large Language Model) gateway that provides a
 - **📊 First-Class Observability**: Built-in integration with [Weights & Biases Weave](https://wandb.ai/site/weave) for seamless tracing, monitoring, and debugging
 - **🐍 Pythonic Interface**: Clean, intuitive Python API that feels native to the ecosystem
 - **🔒 Type-Safe**: Full type hints for better IDE support and code quality
+- **🌊 Streaming Support**: Real-time streaming responses for better user experience
 
 ## 🚀 Installation
 
@@ -54,6 +55,33 @@ response = completion(
 # Access the response
 print(response["choices"][0]["message"]["content"])
 print(f"Tokens used: {response['usage']['total_tokens']}")
+```
+
+### Streaming Responses
+
+For real-time streaming of responses:
+
+```python
+from ritellm import completion
+
+messages = [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Write a short poem about Rust."}
+]
+
+# Enable streaming
+response = completion(
+    model="openai/gpt-3.5-turbo",
+    messages=messages,
+    stream=True
+)
+
+# Stream the response
+for chunk in response:
+    if "choices" in chunk and len(chunk["choices"]) > 0:
+        content = chunk["choices"][0]["delta"].get("content", "")
+        if content:
+            print(content, end="", flush=True)
 ```
 
 ### With Weave Tracing
