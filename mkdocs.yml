@@ -80,5 +80,3 @@ nav:
     - Rust Usage: guides/rust-usage.md
   - API-Reference:
     - Python: api-reference/python/completion.md
-  - Implementation-Details:
-    - Streaming: implementation/streaming.md
