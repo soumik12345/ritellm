@@ -1,9 +1,9 @@
+use futures_util::stream::StreamExt;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::env;
-use futures_util::stream::StreamExt;
 
 /// Result type for completion functions
 #[derive(Debug)]
@@ -15,8 +15,8 @@ pub enum CompletionResult {
 /// A Python iterator that yields streaming response chunks
 #[pyclass]
 pub struct StreamingResponse {
-    chunks: Vec<String>,
-    index: usize,
+    pub chunks: Vec<String>,
+    pub index: usize,
 }
 
 #[pymethods]
@@ -33,6 +33,12 @@ impl StreamingResponse {
         } else {
             None
         }
+    }
+}
+
+impl StreamingResponse {
+    pub fn new(chunks: Vec<String>) -> Self {
+        StreamingResponse { chunks, index: 0 }
     }
 }
 
@@ -210,8 +216,7 @@ pub async fn openai_completion_async(
 
                 // Parse SSE lines
                 for sse_line in line.lines() {
-                    if sse_line.starts_with("data: ") {
-                        let data = &sse_line[6..];
+                    if let Some(data) = sse_line.strip_prefix("data: ") {
                         if data == "[DONE]" {
                             break;
                         }
@@ -226,7 +231,10 @@ pub async fn openai_completion_async(
     } else {
         // Parse and return the response
         let response_text = response.text().await.map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to read response: {}", e))
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to read response: {}",
+                e
+            ))
         })?;
 
         Ok(CompletionResult::Text(response_text))

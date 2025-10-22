@@ -76,8 +76,7 @@ nav:
   - Home: index.md
   - Guides:
     - Quickstart: guides/quickstart.md
+    - Async Usage: guides/async-usage.md
     - Rust Usage: guides/rust-usage.md
   - API-Reference:
     - Python: api-reference/python/completion.md
-  - Implementation-Details:
-    - Streaming: implementation/streaming.md
