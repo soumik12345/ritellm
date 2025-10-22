@@ -1,22 +1,23 @@
 use futures_util::stream::StreamExt;
 use pyo3::prelude::*;
-use pyo3::types::PyString;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
+use std::sync::mpsc::{channel, Receiver};
+use std::sync::Mutex;
+use std::thread;
 
 /// Result type for completion functions
 #[derive(Debug)]
 pub enum CompletionResult {
     Text(String),
-    Stream(Vec<String>),
+    Stream(Receiver<Result<String, String>>),
 }
 
-/// A Python iterator that yields streaming response chunks
+/// A Python iterator that yields streaming response chunks from a channel
 #[pyclass]
 pub struct StreamingResponse {
-    pub chunks: Vec<String>,
-    pub index: usize,
+    receiver: Mutex<Receiver<Result<String, String>>>,
 }
 
 #[pymethods]
@@ -25,20 +26,21 @@ impl StreamingResponse {
         slf
     }
 
-    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<String> {
-        if slf.index < slf.chunks.len() {
-            let chunk = slf.chunks[slf.index].clone();
-            slf.index += 1;
-            Some(chunk)
-        } else {
-            None
+    fn __next__(slf: PyRef<'_, Self>) -> PyResult<Option<String>> {
+        let receiver = slf.receiver.lock().unwrap();
+        match receiver.recv() {
+            Ok(Ok(chunk)) => Ok(Some(chunk)),
+            Ok(Err(e)) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)),
+            Err(_) => Ok(None), // Channel closed, no more chunks
         }
     }
 }
 
 impl StreamingResponse {
-    pub fn new(chunks: Vec<String>) -> Self {
-        StreamingResponse { chunks, index: 0 }
+    pub fn new(receiver: Receiver<Result<String, String>>) -> Self {
+        StreamingResponse {
+            receiver: Mutex::new(receiver),
+        }
     }
 }
 
@@ -79,39 +81,61 @@ pub fn openai_completion(
         )
     })?;
 
-    // Create a Tokio runtime to run async code
-    let runtime = tokio::runtime::Runtime::new().map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-            "Failed to create runtime: {}",
-            e
-        ))
-    })?;
+    let is_streaming = stream.unwrap_or(false);
 
-    // Run the async completion function
-    let result = runtime.block_on(async {
-        openai_completion_async(
-            api_key,
-            model,
-            messages,
-            temperature,
-            max_tokens,
-            base_url,
-            stream,
-            additional_params,
-        )
-        .await
-    })?;
+    if is_streaming {
+        // Create a channel for streaming responses
+        let (sender, receiver) = channel();
 
-    // Convert the result to a Python object
-    match result {
-        CompletionResult::Text(text) => {
-            let py_str = PyString::new(py, &text);
-            Ok(py_str.unbind().into_any())
-        }
-        CompletionResult::Stream(chunks) => {
-            let streaming_response = StreamingResponse { chunks, index: 0 };
-            Ok(Py::new(py, streaming_response)?.into_any())
-        }
+        // Spawn a thread to handle the async streaming
+        thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+            runtime.block_on(async {
+                if let Err(e) = openai_completion_streaming_async(
+                    api_key,
+                    model,
+                    messages,
+                    temperature,
+                    max_tokens,
+                    base_url,
+                    additional_params,
+                    sender,
+                )
+                .await
+                {
+                    eprintln!("Streaming error: {:?}", e);
+                }
+            });
+        });
+
+        // Return the streaming response iterator
+        let streaming_response = StreamingResponse::new(receiver);
+        Ok(Py::new(py, streaming_response)?.to_object(py))
+    } else {
+        // Create a Tokio runtime to run async code
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to create runtime: {}",
+                e
+            ))
+        })?;
+
+        // Run the async completion function
+        let result = runtime.block_on(async {
+            openai_completion_async(
+                api_key,
+                model,
+                messages,
+                temperature,
+                max_tokens,
+                base_url,
+                additional_params,
+            )
+            .await
+        })?;
+
+        // Convert the result to a Python object
+        Ok(result.into_py(py))
     }
 }
 
@@ -122,12 +146,10 @@ pub async fn openai_completion_async(
     temperature: Option<f32>,
     max_tokens: Option<i32>,
     base_url: Option<String>,
-    stream: Option<bool>,
     additional_params: Option<String>,
-) -> PyResult<CompletionResult> {
+) -> PyResult<String> {
     let client = reqwest::Client::new();
     let url = base_url.unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
-    let is_streaming = stream.unwrap_or(false);
 
     // Build the request body
     let mut body = json!({
@@ -141,9 +163,6 @@ pub async fn openai_completion_async(
     }
     if let Some(tokens) = max_tokens {
         body["max_tokens"] = json!(tokens);
-    }
-    if is_streaming {
-        body["stream"] = json!(true);
     }
 
     // Merge additional parameters if provided
@@ -189,54 +208,111 @@ pub async fn openai_completion_async(
         )));
     }
 
-    // Handle streaming vs non-streaming responses
-    if is_streaming {
-        let mut chunks = Vec::new();
-        let mut stream = response.bytes_stream();
-        let mut buffer = String::new();
+    // Parse and return the response
+    let response_text = response.text().await.map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to read response: {}", e))
+    })?;
 
-        while let Some(item) = stream.next().await {
-            let bytes = item.map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                    "Failed to read stream: {}",
-                    e
-                ))
-            })?;
+    Ok(response_text)
+}
 
-            buffer.push_str(&String::from_utf8_lossy(&bytes));
+pub async fn openai_completion_streaming_async(
+    api_key: String,
+    model: String,
+    messages: Vec<HashMap<String, String>>,
+    temperature: Option<f32>,
+    max_tokens: Option<i32>,
+    base_url: Option<String>,
+    additional_params: Option<String>,
+    sender: std::sync::mpsc::Sender<Result<String, String>>,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let url = base_url.unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
 
-            // Process SSE format (Server-Sent Events)
-            while let Some(pos) = buffer.find("\n\n") {
-                let line = buffer[..pos].to_string();
-                buffer = buffer[pos + 2..].to_string();
+    // Build the request body
+    let mut body = json!({
+        "model": model,
+        "messages": messages,
+        "stream": true,
+    });
 
-                if line.is_empty() {
-                    continue;
-                }
+    // Add optional parameters
+    if let Some(temp) = temperature {
+        body["temperature"] = json!(temp);
+    }
+    if let Some(tokens) = max_tokens {
+        body["max_tokens"] = json!(tokens);
+    }
 
-                // Parse SSE lines
-                for sse_line in line.lines() {
-                    if let Some(data) = sse_line.strip_prefix("data: ") {
-                        if data == "[DONE]" {
-                            break;
-                        }
-                        // Store the JSON chunk
-                        chunks.push(data.to_string());
+    // Merge additional parameters if provided
+    if let Some(params_str) = additional_params {
+        let additional: Value = serde_json::from_str(&params_str)
+            .map_err(|e| format!("Invalid JSON in additional_params: {}", e))?;
+
+        if let (Some(body_obj), Some(additional_obj)) =
+            (body.as_object_mut(), additional.as_object())
+        {
+            for (key, value) in additional_obj {
+                body_obj.insert(key.clone(), value.clone());
+            }
+        }
+    }
+
+    // Send the POST request
+    let response = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    // Check if the request was successful
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        let error_msg = format!("API request failed with status {}: {}", status, error_text);
+        let _ = sender.send(Err(error_msg.clone()));
+        return Err(error_msg);
+    }
+
+    // Stream the response chunks
+    let mut stream = response.bytes_stream();
+    let mut buffer = String::new();
+
+    while let Some(item) = stream.next().await {
+        let bytes = item.map_err(|e| format!("Failed to read stream: {}", e))?;
+        buffer.push_str(&String::from_utf8_lossy(&bytes));
+
+        // Process SSE format (Server-Sent Events)
+        while let Some(pos) = buffer.find("\n\n") {
+            let line = buffer[..pos].to_string();
+            buffer = buffer[pos + 2..].to_string();
+
+            if line.is_empty() {
+                continue;
+            }
+
+            // Parse SSE lines
+            for sse_line in line.lines() {
+                if let Some(data) = sse_line.strip_prefix("data: ") {
+                    if data == "[DONE]" {
+                        // Signal completion by dropping the sender
+                        return Ok(());
+                    }
+                    // Send the JSON chunk through the channel
+                    if sender.send(Ok(data.to_string())).is_err() {
+                        // Receiver dropped, stop streaming
+                        return Ok(());
                     }
                 }
             }
         }
-
-        Ok(CompletionResult::Stream(chunks))
-    } else {
-        // Parse and return the response
-        let response_text = response.text().await.map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to read response: {}",
-                e
-            ))
-        })?;
-
-        Ok(CompletionResult::Text(response_text))
     }
+
+    Ok(())
 }

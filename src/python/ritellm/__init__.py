@@ -1,4 +1,4 @@
-import asyncio
+import inspect
 import json
 from typing import Any, Iterator
 
@@ -91,8 +91,9 @@ async def acompletion(
     """
     Async Python wrapper around the async_completion_gateway function.
 
-    This function provides an async interface to call various LLM providers' chat completion APIs
-    through the Rust-backed async_completion_gateway binding. The model string should include a provider prefix.
+    This function provides a TRUE async interface to call various LLM providers' chat completion APIs
+    through the Rust-backed async_completion_gateway binding using pyo3-asyncio. The model string
+    should include a provider prefix.
 
     !!! example
         ```python
@@ -135,9 +136,10 @@ async def acompletion(
     Environment Variables:
         OPENAI_API_KEY: Required for OpenAI models
     """
-    # Run the Rust function in a thread pool to avoid blocking the event loop
-    result = await asyncio.to_thread(
-        async_completion_gateway,
+    # Call the Rust gateway function
+    # For non-streaming: returns a coroutine (TRUE async with pyo3-asyncio!)
+    # For streaming: returns a StreamingResponse iterator directly
+    result = async_completion_gateway(
         model=model,
         messages=messages,
         temperature=temperature,
@@ -146,6 +148,10 @@ async def acompletion(
         stream=stream,
         additional_params=additional_params,
     )
+
+    # Check if result is a coroutine (non-streaming case with pyo3-asyncio)
+    if inspect.iscoroutine(result):
+        result = await result
 
     # If result is a string (non-streaming), parse and return the JSON
     if isinstance(result, str):
