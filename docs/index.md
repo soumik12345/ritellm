@@ -84,7 +84,34 @@ for chunk in response:
 print()  # New line after streaming completes
 ```
 
-See the [Streaming Guide](streaming.md) for more details.
+See the [Streaming Guide](implementation/streaming.md) for more details.
+
+### Async Usage
+
+For concurrent requests and non-blocking API calls, use the async `acompletion` function:
+
+```python
+import asyncio
+from ritellm import acompletion
+
+async def main():
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+    
+    # Non-blocking async call
+    response = await acompletion(
+        model="openai/gpt-3.5-turbo",
+        messages=messages
+    )
+    
+    print(response["choices"][0]["message"]["content"])
+
+asyncio.run(main())
+```
+
+See the [Async Usage Guide](guides/async-usage.md) for more details on async mode and concurrent requests.
 
 ### With Weave Tracing
 
