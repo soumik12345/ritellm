@@ -1,6 +1,6 @@
-# RiteLLM
-
 <div align="center">
+
+# RiteLLM
 
 **A blazingly fast LLM gateway built with Rust 🦀**
 
@@ -59,7 +59,7 @@ print(f"Tokens used: {response['usage']['total_tokens']}")
 
 ### Streaming Responses
 
-For real-time streaming of responses:
+For real-time streaming of responses as they are generated:
 
 ```python
 from ritellm import completion
@@ -73,7 +73,7 @@ messages = [
 response = completion(
     model="openai/gpt-3.5-turbo",
     messages=messages,
-    stream=True
+    stream=True  # Enable streaming
 )
 
 # Stream the response
@@ -82,7 +82,38 @@ for chunk in response:
         content = chunk["choices"][0]["delta"].get("content", "")
         if content:
             print(content, end="", flush=True)
+
+print()  # New line after streaming completes
 ```
+
+See the [Streaming Guide](https://geekyrakshit.dev/ritellm/guides/quickstart/) for more details.
+
+### Async Usage
+
+For concurrent requests and non-blocking API calls, use the async `acompletion` function:
+
+```python
+import asyncio
+from ritellm import acompletion
+
+async def main():
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+    
+    # Non-blocking async call
+    response = await acompletion(
+        model="openai/gpt-3.5-turbo",
+        messages=messages
+    )
+    
+    print(response["choices"][0]["message"]["content"])
+
+asyncio.run(main())
+```
+
+See the [Async Usage Guide](https://geekyrakshit.dev/ritellm/guides/async-usage/) for more details on async mode and concurrent requests.
 
 ### With Weave Tracing
 
