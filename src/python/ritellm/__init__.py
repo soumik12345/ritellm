@@ -27,11 +27,11 @@ def completion(
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "Hello!"}
         ]
-        
+
         # Non-streaming
         response = completion(model="openai/gpt-3.5-turbo", messages=messages)
         print(response["choices"][0]["message"]["content"])
-        
+
         # Streaming
         response = completion(model="openai/gpt-3.5-turbo", messages=messages, stream=True)
         for chunk in response:
@@ -65,14 +65,14 @@ def completion(
         stream=stream,
         additional_params=additional_params,
     )
-    
+
     # If result is a string (non-streaming), parse and return the JSON
     if isinstance(result, str):
         return json.loads(result)
-    
+
     # If result is an iterator (streaming), wrap it to parse JSON chunks
     def parse_streaming_chunks():
         for chunk in result:
             yield json.loads(chunk)
-    
+
     return parse_streaming_chunks()
