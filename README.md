@@ -143,8 +143,5 @@ response = weave.op(completion)(
 
 ## 🙏 Gratitude
 
-`ritellm` is highly inspired by [litellm](https://github.com/BerriAI/litellm) and its simple API design.
-
-<div align="center">
-Made with ❤️ and 🦀
-</div>
+- `ritellm` is highly inspired by [litellm](https://github.com/BerriAI/litellm) and its simple API design.
+- Made with ❤️ and 🦀
