@@ -281,29 +281,3 @@ async def main():
 
 asyncio.run(main())
 ```
-
-## When to Use Async
-
-Use `acompletion` when you:
-
-- ✅ Need to make multiple API calls concurrently
-- ✅ Are building async applications (FastAPI, aiohttp, etc.)
-- ✅ Want to avoid blocking your event loop
-- ✅ Need to handle many requests efficiently
-
-Use `completion` (sync) when you:
-
-- ✅ Are building simple scripts or notebooks
-- ✅ Only need to make a single request
-- ✅ Prefer simpler, more straightforward code
-- ✅ Are not using an async framework
-
-## Supported Features
-
-The async `acompletion` function supports all the same features as the synchronous `completion`:
-
-- ✅ Streaming and non-streaming responses
-- ✅ All completion parameters (temperature, max_tokens, etc.)
-- ✅ Custom base URLs
-- ✅ Additional parameters via JSON
-- ✅ All supported providers (currently OpenAI)
