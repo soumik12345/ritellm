@@ -1,3 +1,0 @@
-::: ritellm.completion
-
-::: ritellm.acompletion
