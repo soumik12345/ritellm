@@ -1,3 +1,99 @@
+//! # RiteLLM
+//!
+//! A blazingly fast LLM gateway built with Rust 🦀
+//!
+//! ## Features
+//!
+//! - 🚀 **Unified API** - Single interface for multiple LLM providers
+//! - 📡 **Streaming Support** - Real-time streaming responses with async/await
+//! - 🔄 **Provider Routing** - Automatic routing based on model prefix
+//! - ⚡ **Zero-Copy Streaming** - Efficient stream processing using Rust combinators
+//! - 🛡️ **Type Safety** - Full Rust type safety with comprehensive error handling
+//!
+//! ## Quick Start
+//!
+//! ### Non-Streaming Completion
+//!
+//! ```no_run
+//! use ritellm::{completion, ChatCompletionRequest, CompletionResponse, Message};
+//!
+//! # #[tokio::main]
+//! # async fn main() -> anyhow::Result<()> {
+//! let request = ChatCompletionRequest {
+//!     model: "openai/gpt-4o-mini".to_string(),
+//!     messages: vec![Message {
+//!         role: "user".to_string(),
+//!         content: "What is 2+2?".to_string(),
+//!     }],
+//!     temperature: Some(0.7),
+//!     max_tokens: Some(50),
+//!     top_p: None,
+//!     frequency_penalty: None,
+//!     presence_penalty: None,
+//!     stop: None,
+//!     n: None,
+//!     stream: None,
+//! };
+//!
+//! match completion(request).await? {
+//!     CompletionResponse::Response(response) => {
+//!         println!("Response: {}", response.choices[0].message.content);
+//!     }
+//!     _ => {}
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Streaming Completion
+//!
+//! ```no_run
+//! use ritellm::{completion, ChatCompletionRequest, CompletionResponse, Message};
+//! use futures::StreamExt;
+//!
+//! # #[tokio::main]
+//! # async fn main() -> anyhow::Result<()> {
+//! let request = ChatCompletionRequest {
+//!     model: "openai/gpt-4o-mini".to_string(),
+//!     messages: vec![Message {
+//!         role: "user".to_string(),
+//!         content: "Tell me a story.".to_string(),
+//!     }],
+//!     temperature: None,
+//!     max_tokens: None,
+//!     top_p: None,
+//!     frequency_penalty: None,
+//!     presence_penalty: None,
+//!     stop: None,
+//!     n: None,
+//!     stream: Some(true),
+//! };
+//!
+//! match completion(request).await? {
+//!     CompletionResponse::Stream(stream) => {
+//!         // Use stream combinators for elegant processing
+//!         stream
+//!             .filter_map(|result| async move {
+//!                 result.ok()?.choices.first()?.delta.content.clone()
+//!             })
+//!             .for_each(|content| async move {
+//!                 print!("{}", content);
+//!             })
+//!             .await;
+//!     }
+//!     _ => {}
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Environment Setup
+//!
+//! Set your OpenAI API key:
+//! ```bash
+//! export OPENAI_API_KEY="your-api-key-here"
+//! ```
+
 pub mod openai;
 
 use anyhow::{Context, Result};

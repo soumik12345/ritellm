@@ -5,27 +5,48 @@ on:
       - main
 permissions:
   contents: write
+  pages: write
   id-token: write
 
 jobs:
   documentation:
-    name: update documentations on gitHub pages
+    name: Build and deploy documentation to GitHub Pages
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: 📥 Checkout the repository
         uses: actions/checkout@v5
-      - name: 🐍 Install uv
-        uses: astral-sh/setup-uv@v7.1.1
-        with:
-          python-version: 3.13.7
-          activate-environment: true
-      - name: 💾 Cache dependencies
+      
+      - name: 🦀 Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: 💾 Cache cargo dependencies
         uses: actions/cache@v4
         with:
-          key: ${{ github.ref }}
-          path: .cache
-      - name: 📦 Install dependencies
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: 📚 Build documentation
+        run: cargo doc --no-deps --document-private-items
+      
+      - name: 📝 Add redirect index.html
         run: |
-          uv pip install -r pyproject.toml --group docs
-      - name: 📝 Deploy documentation
-        run: uv run mkdocs gh-deploy --force
+          echo '<meta http-equiv="refresh" content="0; url=ritellm/index.html">' > target/doc/index.html
+      
+      - name: 📤 Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/doc
+      
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
