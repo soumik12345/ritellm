@@ -364,6 +364,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore] // Requires API key
     async fn test_openai_completion() {
         let request = ChatCompletionRequest {
             model: "gpt-4o-mini".to_string(),

@@ -221,6 +221,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires API key
     async fn test_completion_with_openai_prefix() {
         let request = ChatCompletionRequest {
             model: "openai/gpt-4o-mini".to_string(),
@@ -253,6 +254,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires API key
     async fn test_completion_with_streaming() {
         let request = ChatCompletionRequest {
             model: "openai/gpt-4o-mini".to_string(),

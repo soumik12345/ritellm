@@ -21,6 +21,6 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: 🧪 Run cargo test
-        run: cargo test
+        run: cargo test -- --include-ignored
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
