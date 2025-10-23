@@ -12,6 +12,9 @@ jobs:
   documentation:
     name: Build and deploy documentation to GitHub Pages
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: 📥 Checkout the repository
         uses: actions/checkout@v5
