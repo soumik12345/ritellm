@@ -1,162 +1,164 @@
 pub mod openai;
 
-use pyo3::prelude::*;
-use pyo3::types::PyString;
-use std::collections::HashMap;
+use anyhow::{Context, Result};
 
-use openai::{CompletionResult, openai_completion, openai_completion_async};
+// Re-export commonly used types for convenience
+pub use openai::{
+    ChatCompletionRequest, ChatCompletionResponse, Choice, Message, Usage, openai_completion,
+};
 
-// Re-export for Rust usage
-pub use openai::CompletionResult as CompletionResultExport;
-
-/// Gateway function that routes completion requests to the appropriate provider
-///
-/// This function checks the model prefix and routes to the appropriate completion function.
-/// Currently supports:
-/// - "openai/" prefix: routes to OpenAI completion
+/// Unified completion function that routes to the appropriate provider based on model prefix
 ///
 /// # Arguments
-/// * `model` - The model to use with provider prefix (e.g., "openai/gpt-4")
-/// * `messages` - A list of message dictionaries with "role" and "content" keys
-/// * `temperature` - Optional sampling temperature (0.0 to 2.0)
-/// * `max_tokens` - Optional maximum tokens to generate
-/// * `base_url` - Optional base URL for the API
-/// * `stream` - Optional boolean to enable streaming responses
-/// * `additional_params` - Optional additional parameters as a JSON string
+///
+/// * `request` - The chat completion request with model specified in format "provider/model"
 ///
 /// # Returns
-/// A JSON string containing the API response, or a StreamingResponse iterator if stream=True
 ///
-/// # Errors
-/// Returns an error if the provider prefix is not supported
-#[pyfunction]
-#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, base_url=None, stream=None, additional_params=None))]
-fn completion_gateway(
-    py: Python,
-    model: String,
-    messages: Vec<HashMap<String, String>>,
-    temperature: Option<f32>,
-    max_tokens: Option<i32>,
-    base_url: Option<String>,
-    stream: Option<bool>,
-    additional_params: Option<String>,
-) -> PyResult<Py<PyAny>> {
+/// * `Result<ChatCompletionResponse>` - The response from the provider or an error
+///
+/// # Supported Providers
+///
+/// * `openai/` - Routes to OpenAI API (e.g., "openai/gpt-4o", "openai/gpt-4o-mini")
+///
+/// # Environment Variables
+///
+/// * `OPENAI_API_KEY` - Required for OpenAI models
+///
+/// # Example
+///
+/// ```no_run
+/// use ritellm::{completion, ChatCompletionRequest, Message};
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let request = ChatCompletionRequest {
+///         model: "openai/gpt-4o-mini".to_string(),
+///         messages: vec![
+///             Message {
+///                 role: "user".to_string(),
+///                 content: "Hello!".to_string(),
+///             }
+///         ],
+///         temperature: Some(0.7),
+///         max_tokens: Some(100),
+///         top_p: None,
+///         frequency_penalty: None,
+///         presence_penalty: None,
+///         stop: None,
+///         n: None,
+///         stream: None,
+///     };
+///
+///     let response = completion(request).await?;
+///     println!("{}", response.choices[0].message.content);
+///     Ok(())
+/// }
+/// ```
+pub async fn completion(mut request: ChatCompletionRequest) -> Result<ChatCompletionResponse> {
     // Check if model starts with "openai/"
-    if model.starts_with("openai/") {
+    if request.model.starts_with("openai/") {
         // Strip the "openai/" prefix
-        let actual_model = model.strip_prefix("openai/").unwrap().to_string();
+        request.model = request
+            .model
+            .strip_prefix("openai/")
+            .context("Failed to strip openai/ prefix")?
+            .to_string();
 
-        // Call openai_completion with the actual model name
-        openai_completion(
-            py,
-            actual_model,
-            messages,
-            temperature,
-            max_tokens,
-            base_url,
-            stream,
-            additional_params,
+        // Call the OpenAI completion function
+        openai_completion(request).await
+    } else {
+        // Return error for unsupported providers
+        anyhow::bail!(
+            "Unsupported provider in model '{}'. Currently only 'openai/' prefix is supported.",
+            request.model
         )
-    } else {
-        // Provider not supported
-        Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-            "Provider not supported for model: {}",
-            model
-        )))
     }
 }
 
-/// Async gateway function that routes completion requests to the appropriate provider
-///
-/// This is the async version of completion_gateway that can be awaited from Python.
-/// It checks the model prefix and routes to the appropriate async completion function.
-/// Currently supports:
-/// - "openai/" prefix: routes to OpenAI completion
-///
-/// # Arguments
-/// * `model` - The model to use with provider prefix (e.g., "openai/gpt-4")
-/// * `messages` - A list of message dictionaries with "role" and "content" keys
-/// * `temperature` - Optional sampling temperature (0.0 to 2.0)
-/// * `max_tokens` - Optional maximum tokens to generate
-/// * `base_url` - Optional base URL for the API
-/// * `stream` - Optional boolean to enable streaming responses
-/// * `additional_params` - Optional additional parameters as a JSON string
-///
-/// # Returns
-/// A JSON string containing the API response, or a StreamingResponse iterator if stream=True
-///
-/// # Errors
-/// Returns an error if the provider prefix is not supported
-#[pyfunction]
-#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, base_url=None, stream=None, additional_params=None))]
-fn async_completion_gateway(
-    py: Python,
-    model: String,
-    messages: Vec<HashMap<String, String>>,
-    temperature: Option<f32>,
-    max_tokens: Option<i32>,
-    base_url: Option<String>,
-    stream: Option<bool>,
-    additional_params: Option<String>,
-) -> PyResult<Py<PyAny>> {
-    // Check if model starts with "openai/"
-    if model.starts_with("openai/") {
-        // Strip the "openai/" prefix
-        let actual_model = model.strip_prefix("openai/").unwrap().to_string();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        // Load API key from environment variable
-        let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "OPENAI_API_KEY environment variable not set",
-            )
-        })?;
+    #[tokio::test]
+    async fn test_completion_unsupported_provider() {
+        let request = ChatCompletionRequest {
+            model: "anthropic/claude-3".to_string(),
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: "Hello!".to_string(),
+            }],
+            temperature: None,
+            max_tokens: None,
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            stop: None,
+            n: None,
+            stream: None,
+        };
 
-        // Create a Tokio runtime to run async code
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to create runtime: {}",
-                e
-            ))
-        })?;
-
-        // Run the async completion function
-        let result = runtime.block_on(async {
-            openai_completion_async(
-                api_key,
-                actual_model,
-                messages,
-                temperature,
-                max_tokens,
-                base_url,
-                stream,
-                additional_params,
-            )
-            .await
-        })?;
-
-        // Convert the result to a Python object
-        match result {
-            CompletionResult::Text(text) => {
-                let py_str = PyString::new(py, &text);
-                Ok(py_str.unbind().into_any())
-            }
-            CompletionResult::Stream(chunks) => {
-                let streaming_response = openai::StreamingResponse::new(chunks);
-                Ok(Py::new(py, streaming_response)?.into_any())
-            }
-        }
-    } else {
-        // Provider not supported
-        Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-            "Provider not supported for model: {}",
-            model
-        )))
+        let result = completion(request).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unsupported provider")
+        );
     }
-}
 
-#[pymodule]
-fn ritellm(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(completion_gateway, m)?)?;
-    m.add_function(wrap_pyfunction!(async_completion_gateway, m)?)?;
-    Ok(())
+    #[tokio::test]
+    async fn test_completion_no_provider() {
+        let request = ChatCompletionRequest {
+            model: "gpt-4o".to_string(),
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: "Hello!".to_string(),
+            }],
+            temperature: None,
+            max_tokens: None,
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            stop: None,
+            n: None,
+            stream: None,
+        };
+
+        let result = completion(request).await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unsupported provider")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_completion_with_openai_prefix() {
+        let request = ChatCompletionRequest {
+            model: "openai/gpt-4o-mini".to_string(),
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: "Say 'test' and nothing else.".to_string(),
+            }],
+            temperature: Some(0.0),
+            max_tokens: Some(10),
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            stop: None,
+            n: None,
+            stream: None,
+        };
+
+        let result = completion(request).await;
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(!response.choices.is_empty());
+        assert!(!response.choices[0].message.content.is_empty());
+    }
 }

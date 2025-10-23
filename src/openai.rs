@@ -1,242 +1,201 @@
-use futures_util::stream::StreamExt;
-use pyo3::prelude::*;
-use pyo3::types::PyString;
-use serde_json::{Value, json};
-use std::collections::HashMap;
+use anyhow::{Context, Result};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::env;
 
-/// Result type for completion functions
-#[derive(Debug)]
-pub enum CompletionResult {
-    Text(String),
-    Stream(Vec<String>),
+/// Message structure for chat completions
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Message {
+    pub role: String,
+    pub content: String,
 }
 
-/// A Python iterator that yields streaming response chunks
-#[pyclass]
-pub struct StreamingResponse {
-    pub chunks: Vec<String>,
-    pub index: usize,
+/// Request structure for OpenAI chat completions
+#[derive(Debug, Serialize)]
+pub struct ChatCompletionRequest {
+    pub model: String,
+    pub messages: Vec<Message>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub n: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
 }
 
-#[pymethods]
-impl StreamingResponse {
-    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
-        slf
-    }
-
-    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<String> {
-        if slf.index < slf.chunks.len() {
-            let chunk = slf.chunks[slf.index].clone();
-            slf.index += 1;
-            Some(chunk)
-        } else {
-            None
-        }
-    }
+/// Choice structure in the response
+#[derive(Debug, Deserialize, Clone)]
+pub struct Choice {
+    pub index: u32,
+    pub message: Message,
+    pub finish_reason: Option<String>,
 }
 
-impl StreamingResponse {
-    pub fn new(chunks: Vec<String>) -> Self {
-        StreamingResponse { chunks, index: 0 }
-    }
+/// Usage statistics in the response
+#[derive(Debug, Deserialize, Clone)]
+pub struct Usage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
 }
 
-/// Sends a POST request to OpenAI's chat completion endpoint and returns the result
-///
-/// The API key is loaded from the `OPENAI_API_KEY` environment variable.
+/// Response structure from OpenAI chat completions
+#[derive(Debug, Deserialize)]
+pub struct ChatCompletionResponse {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: String,
+    pub choices: Vec<Choice>,
+    pub usage: Usage,
+}
+
+/// Error structure from OpenAI API
+#[derive(Debug, Deserialize)]
+pub struct OpenAIError {
+    pub error: ErrorDetail,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ErrorDetail {
+    pub message: String,
+    #[serde(rename = "type")]
+    pub error_type: String,
+    pub param: Option<String>,
+    pub code: Option<String>,
+}
+
+/// Creates a chat completion using the OpenAI API
 ///
 /// # Arguments
-/// * `model` - The model to use (e.g., "gpt-4", "gpt-3.5-turbo")
-/// * `messages` - A list of message dictionaries with "role" and "content" keys
-/// * `temperature` - Optional sampling temperature (0.0 to 2.0)
-/// * `max_tokens` - Optional maximum tokens to generate
-/// * `base_url` - Optional base URL for the OpenAI API
-/// * `stream` - Optional boolean to enable streaming responses
-/// * `additional_params` - Optional additional parameters as a JSON string
+///
+/// * `request` - The chat completion request containing model, messages, and optional parameters
 ///
 /// # Returns
-/// A JSON string containing the API response, or a StreamingResponse iterator if stream=True
+///
+/// * `Result<ChatCompletionResponse>` - The response from OpenAI API or an error
 ///
 /// # Environment Variables
-/// * `OPENAI_API_KEY` - Required: Your OpenAI API key
-#[pyfunction]
-#[pyo3(signature = (model, messages, temperature=None, max_tokens=None, base_url=None, stream=None, additional_params=None))]
-pub fn openai_completion(
-    py: Python,
-    model: String,
-    messages: Vec<HashMap<String, String>>,
-    temperature: Option<f32>,
-    max_tokens: Option<i32>,
-    base_url: Option<String>,
-    stream: Option<bool>,
-    additional_params: Option<String>,
-) -> PyResult<Py<PyAny>> {
-    // Load API key from environment variable
-    let api_key = env::var("OPENAI_API_KEY").map_err(|_| {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            "OPENAI_API_KEY environment variable not set",
-        )
-    })?;
+///
+/// * `OPENAI_API_KEY` - Required. Your OpenAI API key
+///
+/// # Example
+///
+/// ```no_run
+/// use ritellm::openai::{openai_completion, ChatCompletionRequest, Message};
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let request = ChatCompletionRequest {
+///         model: "gpt-4o".to_string(),
+///         messages: vec![
+///             Message {
+///                 role: "user".to_string(),
+///                 content: "Hello, how are you?".to_string(),
+///             }
+///         ],
+///         temperature: Some(0.7),
+///         max_tokens: Some(100),
+///         top_p: None,
+///         frequency_penalty: None,
+///         presence_penalty: None,
+///         stop: None,
+///         n: None,
+///         stream: None,
+///     };
+///
+///     let response = openai_completion(request).await?;
+///     println!("Response: {}", response.choices[0].message.content);
+///     Ok(())
+/// }
+/// ```
+pub async fn openai_completion(request: ChatCompletionRequest) -> Result<ChatCompletionResponse> {
+    // Get API key from environment
+    let api_key =
+        env::var("OPENAI_API_KEY").context("OPENAI_API_KEY environment variable not set")?;
 
-    // Create a Tokio runtime to run async code
-    let runtime = tokio::runtime::Runtime::new().map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-            "Failed to create runtime: {}",
-            e
-        ))
-    })?;
+    // API endpoint
+    let url = "https://api.openai.com/v1/chat/completions";
 
-    // Run the async completion function
-    let result = runtime.block_on(async {
-        openai_completion_async(
-            api_key,
-            model,
-            messages,
-            temperature,
-            max_tokens,
-            base_url,
-            stream,
-            additional_params,
-        )
-        .await
-    })?;
+    // Create HTTP client
+    let client = Client::new();
 
-    // Convert the result to a Python object
-    match result {
-        CompletionResult::Text(text) => {
-            let py_str = PyString::new(py, &text);
-            Ok(py_str.unbind().into_any())
-        }
-        CompletionResult::Stream(chunks) => {
-            let streaming_response = StreamingResponse { chunks, index: 0 };
-            Ok(Py::new(py, streaming_response)?.into_any())
-        }
-    }
-}
-
-pub async fn openai_completion_async(
-    api_key: String,
-    model: String,
-    messages: Vec<HashMap<String, String>>,
-    temperature: Option<f32>,
-    max_tokens: Option<i32>,
-    base_url: Option<String>,
-    stream: Option<bool>,
-    additional_params: Option<String>,
-) -> PyResult<CompletionResult> {
-    let client = reqwest::Client::new();
-    let url = base_url.unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
-    let is_streaming = stream.unwrap_or(false);
-
-    // Build the request body
-    let mut body = json!({
-        "model": model,
-        "messages": messages,
-    });
-
-    // Add optional parameters
-    if let Some(temp) = temperature {
-        body["temperature"] = json!(temp);
-    }
-    if let Some(tokens) = max_tokens {
-        body["max_tokens"] = json!(tokens);
-    }
-    if is_streaming {
-        body["stream"] = json!(true);
-    }
-
-    // Merge additional parameters if provided
-    if let Some(params_str) = additional_params {
-        let additional: Value = serde_json::from_str(&params_str).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid JSON in additional_params: {}",
-                e
-            ))
-        })?;
-
-        if let (Some(body_obj), Some(additional_obj)) =
-            (body.as_object_mut(), additional.as_object())
-        {
-            for (key, value) in additional_obj {
-                body_obj.insert(key.clone(), value.clone());
-            }
-        }
-    }
-
-    // Send the POST request
+    // Send POST request
     let response = client
         .post(url)
         .header("Authorization", format!("Bearer {}", api_key))
         .header("Content-Type", "application/json")
-        .json(&body)
+        .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Request failed: {}", e))
-        })?;
+        .context("Failed to send request to OpenAI API")?;
 
-    // Check if the request was successful
-    let status = response.status();
-    if !status.is_success() {
+    // Check if request was successful
+    if response.status().is_success() {
+        let completion_response: ChatCompletionResponse = response
+            .json()
+            .await
+            .context("Failed to parse successful response from OpenAI API")?;
+        Ok(completion_response)
+    } else {
+        // Try to parse error response
+        let status = response.status();
         let error_text = response
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-            "API request failed with status {}: {}",
-            status, error_text
-        )));
-    }
 
-    // Handle streaming vs non-streaming responses
-    if is_streaming {
-        let mut chunks = Vec::new();
-        let mut stream = response.bytes_stream();
-        let mut buffer = String::new();
-
-        while let Some(item) = stream.next().await {
-            let bytes = item.map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                    "Failed to read stream: {}",
-                    e
-                ))
-            })?;
-
-            buffer.push_str(&String::from_utf8_lossy(&bytes));
-
-            // Process SSE format (Server-Sent Events)
-            while let Some(pos) = buffer.find("\n\n") {
-                let line = buffer[..pos].to_string();
-                buffer = buffer[pos + 2..].to_string();
-
-                if line.is_empty() {
-                    continue;
-                }
-
-                // Parse SSE lines
-                for sse_line in line.lines() {
-                    if let Some(data) = sse_line.strip_prefix("data: ") {
-                        if data == "[DONE]" {
-                            break;
-                        }
-                        // Store the JSON chunk
-                        chunks.push(data.to_string());
-                    }
-                }
-            }
+        // Try to parse as OpenAI error format
+        if let Ok(error_response) = serde_json::from_str::<OpenAIError>(&error_text) {
+            anyhow::bail!(
+                "OpenAI API error ({}): {} - {}",
+                status,
+                error_response.error.error_type,
+                error_response.error.message
+            );
+        } else {
+            anyhow::bail!("OpenAI API error ({}): {}", status, error_text);
         }
+    }
+}
 
-        Ok(CompletionResult::Stream(chunks))
-    } else {
-        // Parse and return the response
-        let response_text = response.text().await.map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to read response: {}",
-                e
-            ))
-        })?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        Ok(CompletionResult::Text(response_text))
+    #[tokio::test]
+    async fn test_openai_completion() {
+        let request = ChatCompletionRequest {
+            model: "gpt-4o-mini".to_string(),
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: "Say 'Hello, World!' and nothing else.".to_string(),
+            }],
+            temperature: Some(0.0),
+            max_tokens: Some(10),
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            stop: None,
+            n: None,
+            stream: None,
+        };
+
+        let response = openai_completion(request).await;
+        assert!(response.is_ok());
+
+        let response = response.unwrap();
+        assert!(!response.choices.is_empty());
+        assert!(!response.choices[0].message.content.is_empty());
     }
 }
