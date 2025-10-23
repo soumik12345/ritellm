@@ -324,55 +324,39 @@ pub async fn openai_completion_stream(
 }
 
 /// Internal helper function to create and process the SSE stream
-async fn create_stream(mut event_source: EventSource) -> ChatCompletionResponseStream {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+async fn create_stream(event_source: EventSource) -> ChatCompletionResponseStream {
+    use futures::StreamExt;
 
-    tokio::spawn(async move {
-        while let Some(ev) = futures::StreamExt::next(&mut event_source).await {
-            match ev {
-                Err(e) => {
-                    let error_msg = format!("EventSource error: {}", e);
-                    if tx.send(Err(anyhow::anyhow!(error_msg))).is_err() {
-                        // Receiver dropped, stop processing
-                        break;
-                    }
+    let stream = event_source
+        // Take events until we see [DONE]
+        .take_while(|event| {
+            futures::future::ready(match event {
+                Ok(Event::Message(msg)) => msg.data != "[DONE]",
+                _ => true,
+            })
+        })
+        // Transform events into our response type
+        .filter_map(|event| {
+            futures::future::ready(match event {
+                Err(e) => Some(Err(anyhow::anyhow!("EventSource error: {}", e))),
+                Ok(Event::Message(message)) => {
+                    // Parse the JSON chunk
+                    Some(
+                        serde_json::from_str::<ChatCompletionStreamResponse>(&message.data)
+                            .map_err(|e| {
+                                anyhow::anyhow!(
+                                    "Failed to parse stream response: {} - Data: {}",
+                                    e,
+                                    message.data
+                                )
+                            }),
+                    )
                 }
-                Ok(event) => match event {
-                    Event::Message(message) => {
-                        // Check for [DONE] message which signals end of stream
-                        if message.data == "[DONE]" {
-                            break;
-                        }
+                Ok(Event::Open) => None, // Filter out Open events
+            })
+        });
 
-                        // Parse the JSON chunk
-                        let response = match serde_json::from_str::<ChatCompletionStreamResponse>(
-                            &message.data,
-                        ) {
-                            Ok(output) => Ok(output),
-                            Err(e) => Err(anyhow::anyhow!(
-                                "Failed to parse stream response: {} - Data: {}",
-                                e,
-                                message.data
-                            )),
-                        };
-
-                        if tx.send(response).is_err() {
-                            // Receiver dropped, stop processing
-                            break;
-                        }
-                    }
-                    Event::Open => {
-                        // Connection opened, continue
-                        continue;
-                    }
-                },
-            }
-        }
-
-        event_source.close();
-    });
-
-    Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
+    Box::pin(stream)
 }
 
 #[cfg(test)]
