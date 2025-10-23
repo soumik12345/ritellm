@@ -4,144 +4,144 @@
 
 **A blazingly fast LLM gateway built with Rust 🦀**
 
-[![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 </div>
 
-## Overview
+## ✨ Features
 
-RiteLLM is a high-performance LLM (Large Language Model) gateway that provides a unified interface for interacting with multiple LLM providers. Built with Rust and exposed through elegant Python bindings, RiteLLM combines the speed of compiled systems programming with the ease of Python development.
+- 🚀 **Unified API** - Single interface for multiple LLM providers
+- 📡 **Streaming Support** - Real-time streaming responses with async/await
+- 🔄 **Provider Routing** - Automatic routing based on model prefix (e.g., `openai/gpt-4o`)
+- ⚡ **Zero-Copy Streaming** - Efficient stream processing using Rust combinators
+- 🛡️ **Type Safety** - Full Rust type safety with comprehensive error handling
+- 🎯 **Simple API** - Clean, ergonomic interface for chat completions
 
-## ✨ Key Features
+## 🚦 Quick Start
 
-- **🚀 Unified LLM Gateway**: Single, consistent API for multiple LLM providers
-- **🔌 Provider Support**: Currently supports OpenAI, with more providers coming soon (Anthropic, Google, Cohere, and more)
-- **⚡ Rust-Powered Performance**: Core engine built in Rust for maximum speed and efficiency
-- **📊 First-Class Observability**: Built-in integration with [Weights & Biases Weave](https://wandb.ai/site/weave) for seamless tracing, monitoring, and debugging
-- **🐍 Pythonic Interface**: Clean, intuitive Python API that feels native to the ecosystem
-- **🔒 Type-Safe**: Full type hints for better IDE support and code quality
-- **🌊 Streaming Support**: Real-time streaming responses for better user experience
+### Non-Streaming Completion
 
-## 🚀 Installation
+```rust
+use ritellm::{ChatCompletionRequest, CompletionResponse, Message, completion};
 
-Install RiteLLM using pip:
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let request = ChatCompletionRequest {
+        model: "openai/gpt-4o-mini".to_string(),
+        messages: vec![Message {
+            role: "user".to_string(),
+            content: "What is 2+2?".to_string(),
+        }],
+        temperature: Some(0.7),
+        max_tokens: Some(50),
+        top_p: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+        stop: None,
+        n: None,
+        stream: None,
+    };
+
+    match completion(request).await {
+        Ok(CompletionResponse::Response(response)) => {
+            println!("Model: {}", response.model);
+            println!("Response: {}", response.choices[0].message.content);
+            println!("Tokens used: {}", response.usage.total_tokens);
+        }
+        Ok(CompletionResponse::Stream(_)) => {
+            eprintln!("Unexpected stream response");
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
+    }
+    Ok(())
+}
+```
+
+### Streaming Completion
+
+```rust
+use futures::StreamExt;
+use ritellm::{ChatCompletionRequest, CompletionResponse, Message, completion};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let streaming_request = ChatCompletionRequest {
+        model: "openai/gpt-4o-mini".to_string(),
+        messages: vec![Message {
+            role: "user".to_string(),
+            content: "Count from 1 to 20.".to_string(),
+        }],
+        temperature: Some(0.7),
+        max_tokens: Some(50),
+        top_p: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+        stop: None,
+        n: None,
+        stream: Some(true),
+    };
+
+    match completion(streaming_request).await {
+        Ok(CompletionResponse::Response(_)) => {
+            eprintln!("Unexpected non-streaming response");
+        }
+        Ok(CompletionResponse::Stream(stream)) => {
+            use std::io::Write;
+
+            print!("Response: ");
+
+            // Use stream combinators for cleaner code
+            stream
+                .filter_map(|result| async move {
+                    match result {
+                        Ok(chunk) => chunk
+                            .choices
+                            .first()
+                            .and_then(|choice| choice.delta.content.clone()),
+                        Err(e) => {
+                            eprintln!("\nError: {}", e);
+                            None
+                        }
+                    }
+                })
+                .for_each(|content| async move {
+                    print!("{}", content);
+                    std::io::stdout().flush().ok();
+                })
+                .await;
+
+            println!();
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
+    }
+    Ok(())
+}
+```
+
+## 🔑 Environment Setup
 
 ```bash
-uv pip install ritellm
+export OPENAI_API_KEY="your-api-key-here"
 ```
 
-## 💻 Quick Start
+## 📦 Installation
 
-### Basic Usage
+Add to your `Cargo.toml`:
 
-```python
-from ritellm import completion
-
-# Define your messages
-messages = [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Explain what Rust is in one sentence."}
-]
-
-# Make a completion request
-response = completion(
-    model="openai/gpt-3.5-turbo",
-    messages=messages,
-    temperature=0.7,
-    max_tokens=100
-)
-
-# Access the response
-print(response["choices"][0]["message"]["content"])
-print(f"Tokens used: {response['usage']['total_tokens']}")
+```toml
+[dependencies]
+ritellm = { path = "path/to/ritellm" }
+tokio = { version = "1.48", features = ["full"] }
+anyhow = "1.0"
+futures = "0.3"
 ```
 
-### Streaming Responses
+## 🎯 Supported Providers
 
-For real-time streaming of responses as they are generated:
-
-```python
-from ritellm import completion
-
-messages = [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Write a short poem about Rust."}
-]
-
-# Enable streaming
-response = completion(
-    model="openai/gpt-3.5-turbo",
-    messages=messages,
-    stream=True  # Enable streaming
-)
-
-# Stream the response
-for chunk in response:
-    if "choices" in chunk and len(chunk["choices"]) > 0:
-        content = chunk["choices"][0]["delta"].get("content", "")
-        if content:
-            print(content, end="", flush=True)
-
-print()  # New line after streaming completes
-```
-
-See the [Streaming Guide](https://geekyrakshit.dev/ritellm/guides/quickstart/) for more details.
-
-### Async Usage
-
-For concurrent requests and non-blocking API calls, use the async `acompletion` function:
-
-```python
-import asyncio
-from ritellm import acompletion
-
-async def main():
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello!"}
-    ]
-    
-    # Non-blocking async call
-    response = await acompletion(
-        model="openai/gpt-3.5-turbo",
-        messages=messages
-    )
-    
-    print(response["choices"][0]["message"]["content"])
-
-asyncio.run(main())
-```
-
-See the [Async Usage Guide](https://geekyrakshit.dev/ritellm/guides/async-usage/) for more details on async mode and concurrent requests.
-
-### With Weave Tracing
-
-RiteLLM has first-class support for Weave, enabling automatic tracing and monitoring of your LLM calls:
-
-```python
-import weave
-from ritellm import completion
-
-# Initialize Weave
-weave.init(project_name="my-llm-project")
-
-# Wrap completion with Weave's op decorator for automatic tracing
-messages = [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "What is the capital of France?"}
-]
-
-response = weave.op(completion)(
-    model="openai/gpt-3.5-turbo",
-    messages=messages,
-    temperature=0.7
-)
-
-# Your calls are now automatically traced in Weave!
-```
-
-## 🙏 Gratitude
-
-- `ritellm` is highly inspired by [litellm](https://github.com/BerriAI/litellm) and its simple API design.
-- Made with ❤️ and 🦀
+- ✅ **OpenAI** - Use `openai/` prefix (e.g., `openai/gpt-4o`, `openai/gpt-4o-mini`)
+- 🔜 More providers coming soon!

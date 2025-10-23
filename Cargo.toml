@@ -2,15 +2,27 @@
 name = "ritellm"
 version = "0.1.7"
 edition = "2024"
+description = "A blazingly fast LLM gateway built with Rust"
+license = "MIT"
+repository = "https://github.com/soumik12345/ritellm"
+documentation = "https://soumik12345.github.io/ritellm/ritellm/"
+readme = "README.md"
+keywords = ["llm", "openai", "api", "gateway", "streaming"]
+categories = ["api-bindings", "asynchronous", "web-programming"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
 name = "ritellm"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.27.0", features = ["extension-module"] }
-reqwest = { version = "0.12.24", features = ["json", "rustls-tls", "stream"], default-features = false }
+reqwest = { version = "0.12.24", features = ["json", "stream"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros"] }
-futures-util = "0.3"
+tokio = { version = "1.48.0", features = ["full"] }
+anyhow = "1.0"
+reqwest-eventsource = "0.6.0"
+futures = "0.3"

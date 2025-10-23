@@ -12,26 +12,15 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.12", "3.13"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: 📥 Checkout the repository
         uses: actions/checkout@v5
 
-      - name: 🐍 Install uv and set Python version ${{ matrix.python-version }}
-        uses: astral-sh/setup-uv@v7.1.1
-        with:
-          python-version: ${{ matrix.python-version }}
-          activate-environment: true
+      - name: 🦀 Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
 
-
-      - name: 🚀 Install Packages
-        run: uv tool install maturin && uv pip install -r pyproject.toml --group dev && uv run maturin develop
-
-      - name: 🧪 Run the Import test
-        run: uv run python -c "from ritellm import completion"
-
-      - name: 🧪 Run the Test
-        run: uv run pytest
+      - name: 🧪 Run cargo test
+        run: cargo test -- --include-ignored
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
