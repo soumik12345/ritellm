@@ -23,27 +23,26 @@
 ### Non-Streaming Completion
 
 ```rust
-use ritellm::{ChatCompletionRequest, CompletionResponse, Message, completion};
+use ritellm::{completion, CompletionResponse, Message};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let request = ChatCompletionRequest {
-        model: "openai/gpt-4o-mini".to_string(),
-        messages: vec![Message {
+    match completion(
+        "openai/gpt-4o-mini".to_string(),
+        vec![Message {
             role: "user".to_string(),
             content: "What is 2+2?".to_string(),
         }],
-        temperature: Some(0.7),
-        max_tokens: Some(50),
-        top_p: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        stop: None,
-        n: None,
-        stream: None,
-    };
-
-    match completion(request).await {
+        Some(0.7),
+        Some(50),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ).await {
         Ok(CompletionResponse::Response(response)) => {
             println!("Model: {}", response.model);
             println!("Response: {}", response.choices[0].message.content);
@@ -64,27 +63,26 @@ async fn main() -> anyhow::Result<()> {
 
 ```rust
 use futures::StreamExt;
-use ritellm::{ChatCompletionRequest, CompletionResponse, Message, completion};
+use ritellm::{completion, CompletionResponse, Message};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let streaming_request = ChatCompletionRequest {
-        model: "openai/gpt-4o-mini".to_string(),
-        messages: vec![Message {
+    match completion(
+        "openai/gpt-4o-mini".to_string(),
+        vec![Message {
             role: "user".to_string(),
             content: "Count from 1 to 20.".to_string(),
         }],
-        temperature: Some(0.7),
-        max_tokens: Some(50),
-        top_p: None,
-        frequency_penalty: None,
-        presence_penalty: None,
-        stop: None,
-        n: None,
-        stream: Some(true),
-    };
-
-    match completion(streaming_request).await {
+        Some(0.7),
+        Some(50),
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(true),
+        None,
+    ).await {
         Ok(CompletionResponse::Response(_)) => {
             eprintln!("Unexpected non-streaming response");
         }

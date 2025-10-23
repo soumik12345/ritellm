@@ -15,27 +15,26 @@
 //! ### Non-Streaming Completion
 //!
 //! ```no_run
-//! use ritellm::{completion, ChatCompletionRequest, CompletionResponse, Message};
+//! use ritellm::{completion, CompletionResponse, Message};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> anyhow::Result<()> {
-//! let request = ChatCompletionRequest {
-//!     model: "openai/gpt-4o-mini".to_string(),
-//!     messages: vec![Message {
+//! match completion(
+//!     "openai/gpt-4o-mini".to_string(),
+//!     vec![Message {
 //!         role: "user".to_string(),
 //!         content: "What is 2+2?".to_string(),
 //!     }],
-//!     temperature: Some(0.7),
-//!     max_tokens: Some(50),
-//!     top_p: None,
-//!     frequency_penalty: None,
-//!     presence_penalty: None,
-//!     stop: None,
-//!     n: None,
-//!     stream: None,
-//! };
-//!
-//! match completion(request).await? {
+//!     Some(0.7),
+//!     Some(50),
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//! ).await? {
 //!     CompletionResponse::Response(response) => {
 //!         println!("Response: {}", response.choices[0].message.content);
 //!     }
@@ -48,28 +47,27 @@
 //! ### Streaming Completion
 //!
 //! ```no_run
-//! use ritellm::{completion, ChatCompletionRequest, CompletionResponse, Message};
+//! use ritellm::{completion, CompletionResponse, Message};
 //! use futures::StreamExt;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> anyhow::Result<()> {
-//! let request = ChatCompletionRequest {
-//!     model: "openai/gpt-4o-mini".to_string(),
-//!     messages: vec![Message {
+//! match completion(
+//!     "openai/gpt-4o-mini".to_string(),
+//!     vec![Message {
 //!         role: "user".to_string(),
 //!         content: "Tell me a story.".to_string(),
 //!     }],
-//!     temperature: None,
-//!     max_tokens: None,
-//!     top_p: None,
-//!     frequency_penalty: None,
-//!     presence_penalty: None,
-//!     stop: None,
-//!     n: None,
-//!     stream: Some(true),
-//! };
-//!
-//! match completion(request).await? {
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     Some(true),
+//!     None,
+//! ).await? {
 //!     CompletionResponse::Stream(stream) => {
 //!         // Use stream combinators for elegant processing
 //!         stream
@@ -128,7 +126,17 @@ impl std::fmt::Debug for CompletionResponse {
 ///
 /// # Arguments
 ///
-/// * `request` - The chat completion request with model specified in format "provider/model"
+/// * `model` - The model to use, specified in format "provider/model" (e.g., "openai/gpt-4o-mini")
+/// * `messages` - The conversation messages
+/// * `temperature` - Sampling temperature (0.0 to 2.0)
+/// * `max_tokens` - Maximum number of tokens to generate
+/// * `top_p` - Nucleus sampling parameter
+/// * `frequency_penalty` - Frequency penalty (-2.0 to 2.0)
+/// * `presence_penalty` - Presence penalty (-2.0 to 2.0)
+/// * `stop` - Stop sequences
+/// * `n` - Number of completions to generate
+/// * `stream` - Whether to stream the response
+/// * `base_url` - Custom base URL for the API endpoint
 ///
 /// # Returns
 ///
@@ -145,29 +153,26 @@ impl std::fmt::Debug for CompletionResponse {
 /// # Example (Non-streaming)
 ///
 /// ```no_run
-/// use ritellm::{completion, CompletionResponse, ChatCompletionRequest, Message};
+/// use ritellm::{completion, CompletionResponse, Message};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let request = ChatCompletionRequest {
-///         model: "openai/gpt-4o-mini".to_string(),
-///         messages: vec![
-///             Message {
-///                 role: "user".to_string(),
-///                 content: "Hello!".to_string(),
-///             }
-///         ],
-///         temperature: Some(0.7),
-///         max_tokens: Some(100),
-///         top_p: None,
-///         frequency_penalty: None,
-///         presence_penalty: None,
-///         stop: None,
-///         n: None,
-///         stream: None,
-///     };
-///
-///     match completion(request).await? {
+///     match completion(
+///         "openai/gpt-4o-mini".to_string(),
+///         vec![Message {
+///             role: "user".to_string(),
+///             content: "Hello!".to_string(),
+///         }],
+///         Some(0.7),
+///         Some(100),
+///         None,
+///         None,
+///         None,
+///         None,
+///         None,
+///         None,
+///         None,
+///     ).await? {
 ///         CompletionResponse::Response(response) => {
 ///             println!("{}", response.choices[0].message.content);
 ///         }
@@ -182,30 +187,27 @@ impl std::fmt::Debug for CompletionResponse {
 /// # Example (Streaming)
 ///
 /// ```no_run
-/// use ritellm::{completion, CompletionResponse, ChatCompletionRequest, Message};
+/// use ritellm::{completion, CompletionResponse, Message};
 /// use futures::StreamExt;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let request = ChatCompletionRequest {
-///         model: "openai/gpt-4o-mini".to_string(),
-///         messages: vec![
-///             Message {
-///                 role: "user".to_string(),
-///                 content: "Tell me a story.".to_string(),
-///             }
-///         ],
-///         temperature: Some(0.7),
-///         max_tokens: Some(100),
-///         top_p: None,
-///         frequency_penalty: None,
-///         presence_penalty: None,
-///         stop: None,
-///         n: None,
-///         stream: Some(true),
-///     };
-///
-///     match completion(request).await? {
+///     match completion(
+///         "openai/gpt-4o-mini".to_string(),
+///         vec![Message {
+///             role: "user".to_string(),
+///             content: "Tell me a story.".to_string(),
+///         }],
+///         Some(0.7),
+///         Some(100),
+///         None,
+///         None,
+///         None,
+///         None,
+///         None,
+///         Some(true),
+///         None,
+///     ).await? {
 ///         CompletionResponse::Response(response) => {
 ///             println!("{}", response.choices[0].message.content);
 ///         }
@@ -227,7 +229,33 @@ impl std::fmt::Debug for CompletionResponse {
 ///     Ok(())
 /// }
 /// ```
-pub async fn completion(mut request: ChatCompletionRequest) -> Result<CompletionResponse> {
+pub async fn completion(
+    model: String,
+    messages: Vec<Message>,
+    temperature: Option<f32>,
+    max_tokens: Option<u32>,
+    top_p: Option<f32>,
+    frequency_penalty: Option<f32>,
+    presence_penalty: Option<f32>,
+    stop: Option<Vec<String>>,
+    n: Option<u32>,
+    stream: Option<bool>,
+    base_url: Option<String>,
+) -> Result<CompletionResponse> {
+    // Create the ChatCompletionRequest from individual parameters
+    let mut request = ChatCompletionRequest {
+        model,
+        messages,
+        temperature,
+        max_tokens,
+        top_p,
+        frequency_penalty,
+        presence_penalty,
+        stop,
+        n,
+        stream,
+        base_url,
+    };
     // Check if model starts with "openai/"
     if request.model.starts_with("openai/") {
         // Strip the "openai/" prefix
@@ -262,23 +290,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_completion_unsupported_provider() {
-        let request = ChatCompletionRequest {
-            model: "anthropic/claude-3".to_string(),
-            messages: vec![Message {
+        let result = completion(
+            "anthropic/claude-3".to_string(),
+            vec![Message {
                 role: "user".to_string(),
                 content: "Hello!".to_string(),
             }],
-            temperature: None,
-            max_tokens: None,
-            top_p: None,
-            frequency_penalty: None,
-            presence_penalty: None,
-            stop: None,
-            n: None,
-            stream: None,
-        };
-
-        let result = completion(request).await;
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert!(result.is_err());
         assert!(
             result
@@ -290,23 +318,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_completion_no_provider() {
-        let request = ChatCompletionRequest {
-            model: "gpt-4o".to_string(),
-            messages: vec![Message {
+        let result = completion(
+            "gpt-4o".to_string(),
+            vec![Message {
                 role: "user".to_string(),
                 content: "Hello!".to_string(),
             }],
-            temperature: None,
-            max_tokens: None,
-            top_p: None,
-            frequency_penalty: None,
-            presence_penalty: None,
-            stop: None,
-            n: None,
-            stream: None,
-        };
-
-        let result = completion(request).await;
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert!(result.is_err());
         assert!(
             result
@@ -319,23 +347,23 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires API key
     async fn test_completion_with_openai_prefix() {
-        let request = ChatCompletionRequest {
-            model: "openai/gpt-4o-mini".to_string(),
-            messages: vec![Message {
+        let result = completion(
+            "openai/gpt-4o-mini".to_string(),
+            vec![Message {
                 role: "user".to_string(),
                 content: "Say 'test' and nothing else.".to_string(),
             }],
-            temperature: Some(0.0),
-            max_tokens: Some(10),
-            top_p: None,
-            frequency_penalty: None,
-            presence_penalty: None,
-            stop: None,
-            n: None,
-            stream: None,
-        };
-
-        let result = completion(request).await;
+            Some(0.0),
+            Some(10),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
         assert!(result.is_ok());
 
         match result.unwrap() {
@@ -352,23 +380,23 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires API key
     async fn test_completion_with_streaming() {
-        let request = ChatCompletionRequest {
-            model: "openai/gpt-4o-mini".to_string(),
-            messages: vec![Message {
+        let result = completion(
+            "openai/gpt-4o-mini".to_string(),
+            vec![Message {
                 role: "user".to_string(),
                 content: "Say 'test' and nothing else.".to_string(),
             }],
-            temperature: Some(0.0),
-            max_tokens: Some(10),
-            top_p: None,
-            frequency_penalty: None,
-            presence_penalty: None,
-            stop: None,
-            n: None,
-            stream: Some(true),
-        };
-
-        let result = completion(request).await;
+            Some(0.0),
+            Some(10),
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+        )
+        .await;
         assert!(result.is_ok());
 
         match result.unwrap() {

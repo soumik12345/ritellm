@@ -15,6 +15,7 @@ pub struct Message {
 
 /// Request structure for OpenAI chat completions
 #[derive(Debug, Serialize)]
+#[derive(Default)]
 pub struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
@@ -34,7 +35,20 @@ pub struct ChatCompletionRequest {
     pub n: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
+    /// Base URL for the API endpoint. Defaults to "https://api.openai.com/v1/chat/completions"
+    #[serde(skip)]
+    pub base_url: Option<String>,
 }
+
+impl ChatCompletionRequest {
+    /// Get the base URL for the API endpoint, or return the default OpenAI URL
+    pub fn get_base_url(&self) -> &str {
+        self.base_url
+            .as_deref()
+            .unwrap_or("https://api.openai.com/v1/chat/completions")
+    }
+}
+
 
 /// Choice structure in the response
 #[derive(Debug, Deserialize, Clone)]
@@ -156,6 +170,7 @@ pub type ChatCompletionResponseStream =
 ///         stop: None,
 ///         n: None,
 ///         stream: None,
+///         base_url: None,
 ///     };
 ///
 ///     let response = openai_completion(request).await?;
@@ -173,8 +188,8 @@ pub async fn openai_completion(request: ChatCompletionRequest) -> Result<ChatCom
     let api_key =
         env::var("OPENAI_API_KEY").context("OPENAI_API_KEY environment variable not set")?;
 
-    // API endpoint
-    let url = "https://api.openai.com/v1/chat/completions";
+    // Get API endpoint (defaults to OpenAI URL if not specified)
+    let url = request.get_base_url();
 
     // Create HTTP client
     let client = Client::new();
@@ -259,6 +274,7 @@ pub async fn openai_completion(request: ChatCompletionRequest) -> Result<ChatCom
 ///         stop: None,
 ///         n: None,
 ///         stream: None,  // Will be set to true automatically
+///         base_url: None,
 ///     };
 ///
 ///     let mut stream = openai_completion_stream(request).await;
@@ -297,8 +313,8 @@ pub async fn openai_completion_stream(
         }
     };
 
-    // API endpoint
-    let url = "https://api.openai.com/v1/chat/completions";
+    // Get API endpoint (defaults to OpenAI URL if not specified)
+    let url = request.get_base_url().to_string();
 
     // Create HTTP client
     let client = Client::new();
@@ -380,6 +396,7 @@ mod tests {
             stop: None,
             n: None,
             stream: None,
+            base_url: None,
         };
 
         let response = openai_completion(request).await;
